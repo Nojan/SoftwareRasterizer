@@ -1,0 +1,8 @@
+{
+	"name": "raster",
+	"dependencies": {
+		"derelict-sdl2": "~>2.0.0"
+	},
+	"description": "A software raster render",
+	"license": "MIT"
+}
