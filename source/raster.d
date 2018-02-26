@@ -66,42 +66,52 @@ void line(ref Surface surface, int x0, int y0, int x1, int y1) {
     } 
 } 
 
-Float3 barycentricCoord(const ref Float3 p, const ref Float3 v0, const ref Float3 v1, const ref Float3 v2)
+Float3 Barycentric(const ref Float3 p, const ref Float3 a, const ref Float3 b, const ref Float3 c)
 {
-    Float3 result = Float3(-1, 0, 0);
-    Float3 v0v1 = v1 - v0; 
-    Float3 v0v2 = v2 - v0; // no need to normalize 
-    Float3 N = v0v1.cross(v0v2); // N 
-    const float area2 = N.length();
+    Float3 result;
+    Float3 v0 = b - a, v1 = c - a, v2 = p - a;
+    float d00 = dot(v0, v0);
+    float d01 = dot(v0, v1);
+    float d11 = dot(v1, v1);
+    float d20 = dot(v2, v0);
+    float d21 = dot(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+    result.y = (d11 * d20 - d01 * d21) / denom;
+    result.z = (d00 * d21 - d01 * d20) / denom;
+    result.x = 1.0f - result.y - result.z;
+    return result;
+}
 
-    Float3 C; // vector perpendicular to triangle's plane // edge 0 
-    Float3 edge0 = v1 - v0; 
-    Float3 vp0 = p - v0; 
-    C = edge0.cross(vp0); 
-    if (N.dot(C) <= 0.0) 
-        return result; // P is on the right side // edge 1 
-    Float3 edge1 = v2 - v1; 
-    Float3 vp1 = p - v1; 
-    C = edge1.cross(vp1); 
-    result.y = C.length() / area2; 
-    if (N.dot(C) <= 0.0) 
-        return result; // P is on the right side // edge 2 
-    Float3 edge2 = v0 - v2; 
-    Float3 vp2 = p - v2; 
-    C = edge2.cross(vp2); 
-    result.z = C.length() / area2; 
-    if (N.dot(C) <= 0.0) 
-        return result; // P is on the right side; 
-    result.x = 1;
-    return result; // this ray hits the triangle
+Float3 project(Float3 point, Matrix4 view, Matrix4 proj, Float4 viewport)
+in
+{
+    assert(point.isValid());
+}
+out(result)
+{
+    assert(result.isValid());
+}
+do
+{
+    Float4 p = Float4(point);
+    p = transform(view, p);
+    p = transform(proj, p);
+    //p.data[] /= p.w;
+    p.y = -p.y;
+    p *= 0.5f;
+    p += 0.5f;
+    p.data[0] = p.data[0] * viewport.data[2] + viewport.data[0];
+    p.data[1] = p.data[1] * viewport.data[3] + viewport.data[1];
+    return Float3(p.x, p.y, p.z);
 }
 
 struct Raster {
-    void Render(ref Surface surface, float[] zbuffer)
+    void Render(const Float3 cameraPosition, ref Surface surface, float[] zbuffer)
     in
     {
         assert(surface.m_data.length == m_width * m_height);
         assert(surface.m_data.length == zbuffer.length);
+        assert(cameraPosition.isValid());
     }
     do
     {
@@ -116,21 +126,33 @@ struct Raster {
             }
         }
 
-        line(surface, 10, 10, 25, 25);
-        line(surface, 25, 25, 25, 50);
-        line(surface, 25, 50, 50, 50);
+        const Matrix4 view = lookAt(cameraPosition, Float3(0, 0, 0), Float3(0, 1, 0));
+        const float ratio = cast(float)m_width / cast(float)m_height;
+        const Matrix4 proj = perspective(PI_4, ratio, 0.1f, 10.0f);
+        const Float4 viewport = Float4(0, 0, m_width, m_height);
 
-        Float3 v1 = Float3(56, 56, 0);
-        Float3 v2 = Float3(65, 70, 0);
-        Float3 v0 = Float3(60, 90, 0);
+        Float3[3] triangleWS = [ Float3(0, 0.25f, 0), Float3(-0.25f, -0.25f, 0), Float3(0.25f, -0.25f, 0) ];
+        Float3[3] triangle;
+        foreach(i; 0..3)
+        {
+            triangle[i] = project(triangleWS[i], view, proj, viewport);
+        }
         foreach(y; 0..m_height)
         {
             foreach(x; 0..m_width)
             {
                 Float3 pixel = Float3(x, y, 0);
-                Float3 bary = barycentricCoord(pixel, v0, v1, v2);
-                if(0 < bary.x)
-                    surface.SetPixel(x,y,0);
+
+                immutable Float3 bary = Barycentric(pixel, triangle[0], triangle[1], triangle[2]);
+                if(0 <= bary.x && bary.x <= 1 && 0 <= bary.y && bary.y <= 1 && 0 <= bary.z && bary.z <= 1)
+                {
+                    int blue = cast(int)(bary.y * 255.0f);
+                    int green = cast(int)(bary.z * 255.0f) << 8;
+                    int red = cast(int)(bary.x * 255.0f) << 16;
+                    int color = 0xFF000000 | red | green | blue;
+                    surface.SetPixel(x,y,color);
+                }
+                    
             }
         }
     }

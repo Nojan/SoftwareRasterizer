@@ -5,6 +5,7 @@ import numeric_alias;
 import derelict.sdl2.sdl;
 import std.stdio;
 import std.conv;
+import std.math;
 
 void main()
 {
@@ -16,12 +17,15 @@ void main()
     }
     scope(exit) SDL_Quit();
 
+    int width = 200;
+    int height = 150;
+
     auto window = SDL_CreateWindow(
             "An SDL2 window",
             15,
             25,
-            800,
-            600,
+            width,
+            height,
             SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if(window is null)
     {
@@ -31,9 +35,6 @@ void main()
 
     auto renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
     scope(exit) SDL_DestroyRenderer(renderer);
-
-    int width = 160;
-    int height = 144;
 
     auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
     scope(exit) SDL_DestroyTexture(texture);
@@ -50,8 +51,17 @@ void main()
     zbuffer.length = width*height;
 
     bool run = true;
+    int posX, posY;
     while(run) {
-        raster.Render(surface, zbuffer);
+        SDL_GetMouseState(&posX, &posY);
+
+        SDL_GetWindowSize(window, &width, &height);
+
+        const float phi = cast(float)(posX) / cast(float)(width) * PI;
+        const float theta = cast(float)(posY) / cast(float)(height) * 2.0f * PI;
+        const float d = 1.0f;
+        const Float3 cameraPosition = Float3(d * sin(phi) * cos(theta), d * sin(phi) * sin(theta), d * cos(theta));
+        raster.Render(cameraPosition, surface, zbuffer);
 
         SDL_UpdateTexture(texture, null, surface.m_data.ptr, to!int(width * u32.sizeof));
         SDL_RenderClear(renderer);

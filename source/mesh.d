@@ -16,10 +16,31 @@ struct Float3 {
     float[3] data;
 
     this(float x, float y, float z)
+    in
+    {
+        assert(isFinite(x));
+        assert(isFinite(y));
+        assert(isFinite(z));
+    }
+    out
+    {
+        assert(isValid());
+    }
+    do
     {
         data[0] = x;
         data[1] = y;
         data[2] = z;
+    }
+
+    bool isValid() const
+    {
+        bool result = true;
+        foreach (i; 0 .. 3)
+        {
+            result = result && isFinite(data[i]);
+        }
+        return result;
     }
 
     @property float x() const { return data[0]; }
@@ -64,25 +85,31 @@ struct Float3 {
         mixin("data[]" ~ op ~ "=rhs;");
     }
 
-    float dot(Float3 rhs) const
+    ref Float3 normalize()
     {
-        return x * rhs.x + y * rhs.y + z * rhs.z;
+        const float invLength = 1.0f / length(this);
+        data[] *= invLength;
+        return this;
     }
+}
 
-    float length() const
-    {
-        return sqrt(dot(this));
-    }
+float dot(const Float3 a, const Float3 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
 
-    Float3 cross(const Float3 rhs) const
-    {
-        Float3 result;
-        result.x = y * rhs.z - z * rhs.y;
-        result.y = z * rhs.x - x * rhs.z;
-        result.z = x * rhs.y - y * rhs.x;
-        return result;
-    }
+float length(const Float3 v)
+{
+    return sqrt(dot(v, v));
+}
 
+Float3 cross(const Float3 a, const Float3 b)
+{
+    Float3 result;
+    result.x = a.y * b.z - a.z * b.y;
+    result.y = a.z * b.x - a.x * b.z;
+    result.z = a.x * b.y - a.y * b.x;
+    return result;
 }
 
 unittest {
@@ -113,4 +140,251 @@ struct Mesh {
     Float3[] normals;
     Float2[] uv;
     Face[] face;
+}
+
+struct Float4 {
+    float[4] data;
+
+    this(float x, float y, float z, float w)
+    in
+    {
+        assert(isFinite(x));
+        assert(isFinite(y));
+        assert(isFinite(z));
+        assert(isFinite(w));
+    }
+    out
+    {
+        assert(isValid());
+    }
+    do
+    {
+        data[0] = x;
+        data[1] = y;
+        data[2] = z;
+        data[3] = w;
+    }
+
+    this(const Float3 v)
+    in
+    {
+        assert(v.isValid());
+    }
+    out
+    {
+        assert(isValid());
+    }
+    do
+    {
+        data[0] = v.x;
+        data[1] = v.y;
+        data[2] = v.z;
+        data[3] = 1;
+    }
+
+    bool isValid() const
+    {
+        bool result = true;
+        foreach (i; 0 .. 4)
+        {
+            result = result && isFinite(data[i]);
+        }
+        return result;
+    }
+
+    @property float x() const { return data[0]; }
+    @property ref float x() { return data[0]; }
+    @property float x(float value) { data[0] = value; return value; }
+
+    @property float y() const { return data[1]; }
+    @property ref float y() { return data[1]; }
+    @property float y(float value) { data[1] = value; return value; }
+
+    @property float z() const { return data[2]; }
+    @property ref float z() { return data[2]; }
+    @property float z(float value) { data[2] = value; return value; }
+
+    @property float w() const { return data[3]; }
+    @property ref float w() { return data[3]; }
+    @property float w(float value) { data[3] = value; return value; }
+
+    Float4 opBinary(string op)(const Float4 rhs) const
+    {
+        static assert (op == "+" || op == "-" || op == "*" || op == "/" || op == "%", "Operator "~op~" not implemented");
+        Float4 result;
+        result.data = data[];
+        mixin("result.data[]" ~ op ~ "=rhs.data[];");
+        return result;
+    }
+
+    Float4 opBinary(string op)(float rhs) const
+    {
+        static assert (op == "+" || op == "-" || op == "*" || op == "/" || op == "%", "Operator "~op~" not implemented");
+        Float4 result;
+        result.data = data[];
+        mixin("result.data[]" ~ op ~ "=rhs.data;");
+        return result;
+    }
+
+    void opOpAssign(string op)(const Float4 rhs)
+    {
+        static assert (op == "+" || op == "-" || op == "*" || op == "/" || op == "%", "Operator "~op~" not implemented");
+        mixin("data[]" ~ op ~ "=rhs.data[];");
+    }
+
+    void opOpAssign(string op)(float rhs)
+    {
+        static assert (op == "+" || op == "-" || op == "*" || op == "/" || op == "%", "Operator "~op~" not implemented");
+        mixin("data[]" ~ op ~ "=rhs;");
+    }
+
+}
+
+struct Matrix4 
+{
+    float[4][4] data;
+
+    void identity()
+    {
+        foreach (i; 0 .. 4) {
+            foreach (j; 0 .. 4) {
+                if(i == j)
+                    data[i][j] = 1;
+                else
+                    data[i][j] = 0;
+            }
+        }
+    }
+
+    Matrix4 opBinary(string op)(const ref Matrix4 rhs) const
+    {
+        static assert (op == "*", "Operator "~op~" not implemented");
+        Matrix4 result;
+        foreach (i; 0 .. 4) {
+            foreach (j; 0 .. 4) {
+                result.data[i][j] = 0;
+                foreach (k; 0 .. 4) {
+                    result.data[i][j] += data[i][k] * rhs.data[k][j];
+                }
+            }
+        }
+        return result;
+    }
+
+    void opOpAssign(string op)(const Matrix4 rhs)
+    {
+        static assert (op == "*", "Operator "~op~" not implemented");
+        data = (this * rhs).data;
+    }
+
+    bool opEquals()(auto ref const Matrix4 rhs) const 
+    { 
+        return data[] == rhs.data[];
+    }
+
+    unittest 
+    {
+        Matrix4 a,b;
+        a.identity();
+        b.identity();
+        assert(a == b);
+        Matrix4 c = a*b;
+        assert(a == c);
+        Float3 v = Float3(1, 1, 1);
+        assert(v == c.transform(v));
+    }
+}
+
+Float3 transform(const ref Matrix4 m, const Float3 v)
+in
+{
+    assert(v.isValid());
+}
+out(result)
+{
+    assert(result.isValid());
+}
+do
+{
+    Float4 r4 = transform(m, Float4(v));
+    Float3 result = Float3(r4.x, r4.y, r4.z);
+    result *= (1.0 / r4.w);
+    return result;
+}
+
+Float4 transform(const ref Matrix4 m, const Float4 v)
+in
+{
+    assert(v.isValid());
+}
+out(result)
+{
+    assert(result.isValid());
+}
+do
+{
+    Float4 result = Float4(0, 0, 0, 0);
+    foreach (i; 0 .. 4) {
+        result.data[i] = 0;
+        foreach (k; 0 .. 4) {
+            result.data[i] += m.data[i][k] * v.data[k];
+        }
+    }
+    return result;
+}
+
+Matrix4 viewport(int x, int y, int w, int h, int depth) {
+    Matrix4 m;
+    m.identity();
+
+    m.data[0][3] = x+w/2.0f;
+    m.data[1][3] = y+h/2.0f;
+    m.data[2][3] = depth/2.0f;
+
+    m.data[0][0] = w/2.0f;
+    m.data[1][1] = h/2.0f;
+    m.data[2][2] = depth/2.0f;
+    return m;
+}
+
+Matrix4 lookAt(Float3 eye, Float3 center, Float3 up)
+{
+    const Float3 f = (center - eye).normalize();
+    const Float3 s = (cross(f, up)).normalize();
+    const Float3 u = cross(s, f);
+
+    Matrix4 result;
+    result.identity();
+    result.data[0][0] = s.x;
+    result.data[1][0] = s.y;
+    result.data[2][0] = s.z;
+    result.data[0][1] = u.x;
+    result.data[1][1] = u.y;
+    result.data[2][1] = u.z;
+    result.data[0][2] =-f.x;
+    result.data[1][2] =-f.y;
+    result.data[2][2] =-f.z;
+    result.data[3][0] =-dot(s, eye);
+    result.data[3][1] =-dot(u, eye);
+    result.data[3][2] = dot(f, eye);
+    return result;
+}
+
+Matrix4 perspective(float fovy, float aspect, float zNear, float zFar)
+in
+{
+    assert(aspect > 0);
+}
+do
+{
+    const float tanHalfFovy = tan(fovy / 2.0f);
+    Matrix4 result;
+    result.identity();
+    result.data[0][0] = 1.0f / (aspect * tanHalfFovy);
+    result.data[1][1] = 1.0f / (tanHalfFovy);
+    result.data[2][2] = - (zFar + zNear) / (zFar - zNear);
+    result.data[2][3] = - 1.0f;
+    result.data[3][2] = - (2.0f * zFar * zNear) / (zFar - zNear);
+    result.data[3][3] = 0;
+    return result;
 }
