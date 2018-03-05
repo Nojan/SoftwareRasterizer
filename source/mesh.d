@@ -69,7 +69,7 @@ struct Float3 {
         static assert (op == "+" || op == "-" || op == "*" || op == "/" || op == "%", "Operator "~op~" not implemented");
         Float3 result;
         result.data = data[];
-        mixin("result.data[]" ~ op ~ "=rhs.data;");
+        mixin("result.data[]" ~ op ~ "=rhs;");
         return result;
     }
 
@@ -112,13 +112,23 @@ Float3 cross(const Float3 a, const Float3 b)
     return result;
 }
 
+bool approxEqual(T: Float3, U: Float3) (Float3 lhs, Float3 rhs)
+{
+    bool result = true;
+    foreach(i; 0..3)
+    {
+        result = result && std.math.approxEqual!(float, float)(lhs.data[i], rhs.data[i]);
+    }
+    return result;
+}
+
 unittest {
     const Float3 vec1 = Float3(1., 0., 2.);
     assert(vec1.x() == 1. && vec1.y() == 0. && vec1.z() == 2.);
     const Float3 vec2 = Float3(-1., 0., -2.);
     assert(vec2.x() == -1. && vec2.y() == 0. && vec2.z() == -2.);
     const Float3 vec3 = vec1 + vec2;
-    assert(vec3.x() == 0. && vec3.y() == 0. && vec3.z() == 0.);
+    assert(approxEqual!(Float3, Float3)(vec3, Float3(0, 0, 0)));
 
     immutable float smallEpsilon = 0.0001;
     Float3 unit1 = Float3(1., 0., 0.);
@@ -127,6 +137,9 @@ unittest {
     assert(abs(unit2.length() - 1.) > smallEpsilon);
     unit2 /= unit2.length();
     assert(abs(unit2.length() - 1.) < smallEpsilon);
+
+
+    assert(approxEqual!(Float3, Float3)(Float3(-1, 0, 0), (cross(Float3(0, 0, 1), Float3(0, 1, 0))).normalize()));
 }
 
 struct Face {
@@ -240,6 +253,16 @@ struct Float4 {
 
 }
 
+bool approxEqual(T: Float4, U: Float4) (Float4 lhs, Float4 rhs)
+{
+    bool result = true;
+    foreach(i; 0..4)
+    {
+        result = result && std.math.approxEqual!(float, float)(lhs.data[i], rhs.data[i]);
+    }
+    return result;
+}
+
 struct Matrix4 
 {
     float[4][4] data;
@@ -277,6 +300,16 @@ struct Matrix4
         data = (this * rhs).data;
     }
 
+    void opOpAssign(string op)(const float rhs)
+    {
+        static assert (op == "+" || op == "-" || op == "*" || op == "/" || op == "%", "Operator "~op~" not implemented");
+        foreach (i; 0 .. 4) {
+            foreach (j; 0 .. 4) {
+               mixin("data[i][j]" ~ op ~ "=rhs;");
+            }
+        }
+    }
+
     bool opEquals()(auto ref const Matrix4 rhs) const 
     { 
         return data[] == rhs.data[];
@@ -293,6 +326,19 @@ struct Matrix4
         Float3 v = Float3(1, 1, 1);
         assert(v == c.transform(v));
     }
+}
+
+bool approxEqual(T: Matrix4, U: Matrix4) (Matrix4 lhs, Matrix4 rhs)
+{
+    bool result = true;
+    foreach(i; 0..4)
+    {
+        foreach(j; 0..4)
+        {
+            result = result && std.math.approxEqual!(float, float)(lhs.data[i][j], rhs.data[i][j]);
+        }   
+    }
+    return result;
 }
 
 Float3 transform(const ref Matrix4 m, const Float3 v)
@@ -323,14 +369,22 @@ out(result)
 }
 do
 {
-    Float4 result = Float4(0, 0, 0, 0);
+    Float4 result;
     foreach (i; 0 .. 4) {
         result.data[i] = 0;
         foreach (k; 0 .. 4) {
-            result.data[i] += m.data[i][k] * v.data[k];
+            result.data[i] += m.data[k][i] * v.data[k];
         }
     }
     return result;
+}
+
+unittest 
+{
+    const Matrix4 model = Matrix4([[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0], [0, 0, -1, 1]]);
+    const Float4 vertex = Float4(0, 0.25, 0, 1);
+    const Float4 vertexTransformed = transform(model, vertex);
+    assert(approxEqual!(Float4, Float4)(vertexTransformed, Float4(0, 0.25, -1, 1)));
 }
 
 Matrix4 viewport(int x, int y, int w, int h, int depth) {
@@ -383,8 +437,8 @@ do
     result.data[0][0] = 1.0f / (aspect * tanHalfFovy);
     result.data[1][1] = 1.0f / (tanHalfFovy);
     result.data[2][2] = - (zFar + zNear) / (zFar - zNear);
-    result.data[2][3] = - 1.0f;
     result.data[3][2] = - (2.0f * zFar * zNear) / (zFar - zNear);
+    result.data[2][3] = - 1.0f;
     result.data[3][3] = 0;
     return result;
 }

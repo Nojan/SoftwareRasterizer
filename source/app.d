@@ -56,11 +56,10 @@ void main()
         SDL_GetMouseState(&posX, &posY);
 
         SDL_GetWindowSize(window, &width, &height);
-
-        const float phi = cast(float)(posX) / cast(float)(width) * PI;
-        const float theta = cast(float)(posY) / cast(float)(height) * 2.0f * PI;
+        const float rX = (cast(float)(posX) / cast(float)(width)  - 0.5f) * (PI - 0.00001f);
+        const float rY = (cast(float)(posY) / cast(float)(height) - 0.5f) * (PI - 0.00001f);
         const float d = 1.0f;
-        const Float3 cameraPosition = Float3(d * sin(phi) * cos(theta), d * sin(phi) * sin(theta), d * cos(theta));
+        const Float3 cameraPosition = Float3(sin(rX), -sin(rY), cos(rX) * cos(rY)) * d;
         raster.Render(cameraPosition, surface, zbuffer);
 
         SDL_UpdateTexture(texture, null, surface.m_data.ptr, to!int(width * u32.sizeof));

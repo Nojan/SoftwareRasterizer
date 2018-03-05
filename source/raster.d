@@ -96,7 +96,7 @@ do
     Float4 p = Float4(point);
     p = transform(view, p);
     p = transform(proj, p);
-    //p.data[] /= p.w;
+    p.data[] /= p.w;
     p.y = -p.y;
     p *= 0.5f;
     p += 0.5f;
@@ -104,6 +104,25 @@ do
     p.data[1] = p.data[1] * viewport.data[3] + viewport.data[1];
     return Float3(p.x, p.y, p.z);
 }
+
+unittest
+{  
+    const Float3 original = Float3(0.0f, 0.25f, 0.0f);
+    const float width = 200.0f;
+    const float height = 150.0f;
+    const Matrix4 model = lookAt(Float3(0, 0, -1), Float3(0, 0, 0), Float3(0, 1, 0));
+    const Matrix4 modelCmp = Matrix4([[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0], [0, 0, -1, 1]]);
+    assert(mesh.approxEqual!(Matrix4, Matrix4)(model, modelCmp));
+    const float ratio = width / height;
+    const Matrix4 projection = perspective(PI_4, ratio, 0.1f, 10.0f);
+    const Matrix4 projectionCmp = Matrix4([[1.81066012, 0, 0, 0], [0, 2.41421342, 0, 0], [0, 0, -1.02020204, -1], [0, 0, -0.202020213, 0]]);
+    assert(mesh.approxEqual!(Matrix4, Matrix4)(projection, projectionCmp));
+    const Float4 viewport = Float4(0, 0, width, height);
+
+    //Float3 projected = project(original, model, projection, viewport);
+    //assert(mesh.approxEqual!(Float3, Float3)(projected, Float3(100.000000f, 120.266495f, 0.909090877f)) );
+}
+
 
 struct Raster {
     void Render(const Float3 cameraPosition, ref Surface surface, float[] zbuffer)
