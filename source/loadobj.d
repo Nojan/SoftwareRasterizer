@@ -1,4 +1,5 @@
 import mesh;
+import linearAlgebra;
 
 Mesh LoadFromFile(string filename)
 {

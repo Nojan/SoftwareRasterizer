@@ -1,5 +1,6 @@
 import loadobj;
 import mesh;
+import linearAlgebra;
 import raster;
 import numeric_alias;
 import derelict.sdl2.sdl;
