@@ -2,6 +2,7 @@ import loadobj;
 import mesh;
 import linearAlgebra;
 import raster;
+import surface;
 import numeric_alias;
 import derelict.sdl2.sdl;
 import std.stdio;

@@ -1,41 +1,11 @@
 import loadobj;
 import mesh;
+import surface;
 import linearAlgebra;
 import numeric_alias;
 import std.stdio;
 import std.math;
 import std.algorithm.mutation;
-
-struct Surface
-{
-    ulong width() const @nogc pure @property { return m_width; }
-    ulong height() const  @nogc pure @property { return m_data.length / m_width; }
-
-    void SetSize(uint w, uint h)
-    {
-        m_data.length = w*h;
-        m_width = w;
-    }
-
-    void SetPixel(uint x, uint y, u32 value) @nogc pure
-    in
-    {
-        assert(x <= width);
-        assert(y <= height);
-    }
-    do
-    {
-        m_data[y * m_width + x] = value;
-    }
-
-    u32[] m_data;
-    uint m_width = 0;
-
-    invariant
-    {
-        assert(m_width <= m_data.length);
-    }
-}
 
 void line(ref Surface surface, int x0, int y0, int x1, int y1) { 
     bool steep = false; 
@@ -133,9 +103,9 @@ struct Raster {
         immutable Matrix4 proj = perspective(PI_4, ratio, 0.1f, 10.0f);
         immutable Float4 viewport = Float4(0, 0, m_width, m_height);
 
-        immutable Float3[3] triangleWS = [ Float3(0, 0.25f, 0), Float3(-0.25f, -0.25f, 0), Float3(0.25f, -0.25f, 0) ];
-        Float3[3] triangle;
-        foreach(i; 0..3)
+        immutable Float3[6] triangleWS = [ Float3(0, 0.25f, 0), Float3(-0.25f, -0.25f, 0), Float3(0.25f, -0.25f, 0), Float3(0, 0.1f, -0.5f), Float3(-0.1f, -0.1f, -0.5f), Float3(0.1f, -0.1f, -0.5f) ];
+        Float3[6] triangle;
+        foreach(i; 0..triangle.length)
         {
             triangle[i] = project(triangleWS[i], view, proj, viewport);
         }
@@ -144,17 +114,23 @@ struct Raster {
             foreach(x; 0..m_width)
             {
                 immutable Float3 pixel = Float3(x, y, 0);
-                immutable Float3 bary = Barycentric(pixel, triangle[0], triangle[1], triangle[2]);
-                if(0 <= bary.x && bary.x <= 1 && 0 <= bary.y && bary.y <= 1 && 0 <= bary.z && bary.z <= 1)
+                for(int idxTriangle = 0; idxTriangle < triangleWS.length; idxTriangle += 3)
                 {
-                    //const float z = lerp(bary.z, )
-                    immutable int blue = cast(int)(bary.y * 255.0f);
-                    immutable int green = cast(int)(bary.z * 255.0f) << 8;
-                    immutable int red = cast(int)(bary.x * 255.0f) << 16;
-                    immutable int color = 0xFF000000 | red | green | blue;
-                    surface.SetPixel(x,y,color);
+                    immutable Float3 bary = Barycentric(pixel, triangle[idxTriangle+0], triangle[idxTriangle+1], triangle[idxTriangle+2]);
+                    if(0 <= bary.x && bary.x <= 1 && 0 <= bary.y && bary.y <= 1 && 0 <= bary.z && bary.z <= 1)
+                    {
+                        immutable float z = bary.x * triangle[idxTriangle+0].z + bary.y * triangle[idxTriangle+1].z + bary.z * triangle[idxTriangle+2].z;
+                        if(z < zbuffer[y*m_width+x])
+                        {
+                            zbuffer[y*m_width+x] = z;
+                            immutable int blue = cast(int)(bary.y * 255.0f);
+                            immutable int green = cast(int)(bary.z * 255.0f) << 8;
+                            immutable int red = cast(int)(bary.x * 255.0f) << 16;
+                            immutable int color = 0xFF000000 | red | green | blue;
+                            surface.SetPixel(x,y,color);
+                        }
+                    } 
                 }
-                    
             }
         }
     }
@@ -174,8 +150,15 @@ struct Raster {
     void SetModel(Mesh mesh)
     {
         m_mesh = mesh;
+        m_vertices.length = m_mesh.vertices.length;
     }
 
     int m_width, m_height;
     Mesh m_mesh;
+    Float3[] m_vertices;
+
+    invariant
+    {
+        assert(m_vertices.length == m_mesh.vertices.length);
+    }
 }
