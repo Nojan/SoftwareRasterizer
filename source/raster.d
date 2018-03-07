@@ -103,23 +103,24 @@ struct Raster {
         immutable Matrix4 proj = perspective(PI_4, ratio, 0.1f, 10.0f);
         immutable Float4 viewport = Float4(0, 0, m_width, m_height);
 
-        immutable Float3[6] triangleWS = [ Float3(0, 0.25f, 0), Float3(-0.25f, -0.25f, 0), Float3(0.25f, -0.25f, 0), Float3(0, 0.1f, -0.5f), Float3(-0.1f, -0.1f, -0.5f), Float3(0.1f, -0.1f, -0.5f) ];
-        Float3[6] triangle;
-        foreach(i; 0..triangle.length)
+        foreach(i; 0..m_mesh.vertices.length)
         {
-            triangle[i] = project(triangleWS[i], view, proj, viewport);
+            m_vertices[i] = project(m_mesh.vertices[i], view, proj, viewport);
         }
         foreach(y; 0..m_height)
         {
             foreach(x; 0..m_width)
             {
                 immutable Float3 pixel = Float3(x, y, 0);
-                for(int idxTriangle = 0; idxTriangle < triangleWS.length; idxTriangle += 3)
+                for(int iFace = 0; iFace < m_mesh.face.length; iFace += 3)
+                foreach(face; m_mesh.face)
                 {
-                    immutable Float3 bary = Barycentric(pixel, triangle[idxTriangle+0], triangle[idxTriangle+1], triangle[idxTriangle+2]);
+                    immutable int[3] vIdx = [ face.vertices[0], face.vertices[1], face.vertices[2] ];
+                    immutable Float3[3] vertex = [ m_vertices[vIdx[0]], m_vertices[vIdx[1]], m_vertices[vIdx[2]] ];
+                    immutable Float3 bary = Barycentric(pixel, vertex[0], vertex[1], vertex[2]);
                     if(0 <= bary.x && bary.x <= 1 && 0 <= bary.y && bary.y <= 1 && 0 <= bary.z && bary.z <= 1)
                     {
-                        immutable float z = bary.x * triangle[idxTriangle+0].z + bary.y * triangle[idxTriangle+1].z + bary.z * triangle[idxTriangle+2].z;
+                        immutable float z = bary.x * vertex[0].z + bary.y * vertex[1].z + bary.z * vertex[2].z;
                         if(z < zbuffer[y*m_width+x])
                         {
                             zbuffer[y*m_width+x] = z;
