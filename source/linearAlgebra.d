@@ -4,6 +4,18 @@ struct Float2 {
     @nogc pure:
     float[2] data;
 
+    this(float x, float y)
+    in
+    {
+        assert(isFinite(x));
+        assert(isFinite(y));
+    }
+    do
+    {
+        data[0] = x;
+        data[1] = y;
+    }
+
     @property float x() const { return data[0]; }
     @property ref float x() { return data[0]; }
     @property float x(float value) { data[0] = value; return value; }

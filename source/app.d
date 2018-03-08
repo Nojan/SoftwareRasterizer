@@ -19,13 +19,13 @@ void main()
     }
     scope(exit) SDL_Quit();
 
-    int width = 200;
-    int height = 150;
+    int width = 400;
+    int height = 250;
 
     auto window = SDL_CreateWindow(
             "An SDL2 window",
-            15,
             25,
+            35,
             width,
             height,
             SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
@@ -38,19 +38,11 @@ void main()
     auto renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
     scope(exit) SDL_DestroyRenderer(renderer);
 
-    auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
-    scope(exit) SDL_DestroyTexture(texture);
-
-    Mesh mesh = LoadFromFile("model/saria.obj");
+    Mesh mesh = LoadFromFile("model/2triangle.obj");
 
     Raster raster;
     raster.SetModel(mesh);
-    raster.SetSize(width, height);
-
     Surface surface;
-    surface.SetSize(width, height);
-    float[] zbuffer;
-    zbuffer.length = width*height;
 
     bool run = true;
     int posX, posY;
@@ -58,12 +50,15 @@ void main()
         SDL_GetMouseState(&posX, &posY);
 
         SDL_GetWindowSize(window, &width, &height);
+        surface.SetSize(width, height);
+        raster.SetSize(width, height);
         const float rX = (cast(float)(posX) / cast(float)(width)  - 0.5f) * (PI - 0.00001f);
         const float rY = (cast(float)(posY) / cast(float)(height) - 0.5f) * (PI - 0.00001f);
-        const float d = 1.0f;
+        const float d = 3.0f;
         const Float3 cameraPosition = Float3(sin(rX), -sin(rY), cos(rX) * cos(rY)) * d;
-        raster.Render(cameraPosition, surface, zbuffer);
-
+        raster.Render(cameraPosition, surface);
+        auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+        scope(exit) SDL_DestroyTexture(texture);
         SDL_UpdateTexture(texture, null, surface.m_data.ptr, to!int(width * u32.sizeof));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, null, null);

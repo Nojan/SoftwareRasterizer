@@ -1,5 +1,7 @@
 import mesh;
 import linearAlgebra;
+import std.math: abs;
+import std.algorithm.comparison: min, max;
 
 Mesh LoadFromFile(string filename)
 {
@@ -9,6 +11,8 @@ Mesh LoadFromFile(string filename)
 
     Mesh mesh;
     auto file = File(filename);
+    Float3 vMin = Float3(float.max,float.max,float.max);
+    Float3 vMax = Float3(-float.max,-float.max,-float.max);
 	foreach (l; file.byLine())
     {
         string line = l.idup;
@@ -16,6 +20,8 @@ Mesh LoadFromFile(string filename)
         {
             Float3 vertex;
             line.formattedRead!"v %f %f %f"(vertex.x, vertex.y, vertex.z);
+            vMin = Float3(min(vMin.x, vertex.x), min(vMin.y, vertex.y), min(vMin.z, vertex.z));
+            vMax = Float3(max(vMax.x, vertex.x), max(vMax.y, vertex.y), max(vMax.z, vertex.z));
             mesh.vertices ~= vertex; 
         }
         else if(startsWith(line, "vn "))
@@ -47,6 +53,16 @@ Mesh LoadFromFile(string filename)
             f.normals[2] = idx[8];
             mesh.face ~= f; 
         }
+    }
+
+    // center and normalize the model
+    immutable Float3 center = (vMax + vMin) * 0.5f;
+    vMax -= center;
+    vMin -= center;
+    immutable float sizeInv = 1.0f / max(abs(vMax.x), abs(vMax.y), abs(vMax.z), abs(vMin.x), abs(vMin.y), abs(vMin.z));
+    foreach(ref vertex; mesh.vertices)
+    {
+        vertex = (vertex - center) * sizeInv;
     }
     return mesh;
 }

@@ -6,6 +6,7 @@ import numeric_alias;
 import std.stdio;
 import std.math;
 import std.algorithm.mutation;
+import std.algorithm.comparison: min, max;
 
 void line(ref Surface surface, int x0, int y0, int x1, int y1) { 
     bool steep = false; 
@@ -41,14 +42,48 @@ Float3 Barycentric(const ref Float3 p, const ref Float3 a, const ref Float3 b, c
 {
     Float3 result;
     Float3 v0 = b - a, v1 = c - a, v2 = p - a;
-    float d00 = dot(v0, v0);
-    float d01 = dot(v0, v1);
-    float d11 = dot(v1, v1);
-    float d20 = dot(v2, v0);
-    float d21 = dot(v2, v1);
-    float denom = d00 * d11 - d01 * d01;
-    result.y = (d11 * d20 - d01 * d21) / denom;
-    result.z = (d00 * d21 - d01 * d20) / denom;
+    immutable float d00 = dot(v0, v0);
+    immutable float d01 = dot(v0, v1);
+    immutable float d11 = dot(v1, v1);
+    immutable float d20 = dot(v2, v0);
+    immutable float d21 = dot(v2, v1);
+    immutable float denomInv = 1.0f / (d00 * d11 - d01 * d01);
+    result.y = (d11 * d20 - d01 * d21) * denomInv;
+    result.z = (d00 * d21 - d01 * d20) * denomInv;
+    result.x = 1.0f - result.y - result.z;
+    return result;
+}
+
+struct PreComputedBarycentric
+{
+    Float3 v0;
+    Float3 v1;
+    float d00;
+    float d01;
+    float d11;
+    float denomInv;
+}
+
+PreComputedBarycentric PreComputeBarycentric(in Float3 a, in Float3 b, in Float3 c) @nogc pure
+{
+    PreComputedBarycentric result;
+    result.v0 = b - a;
+    result.v1 = c - a;
+    result.d00 = dot(result.v0, result.v0);
+    result.d01 = dot(result.v0, result.v1);
+    result.d11 = dot(result.v1, result.v1);
+    result.denomInv = 1.0f / (result.d00 * result.d11 - result.d01 * result.d01);
+    return result;
+}
+
+Float3 Barycentric(in Float3 p, in Float3 a, in PreComputedBarycentric b) @nogc pure
+{
+    Float3 result;
+    immutable Float3 v2 = p - a;
+    immutable float d20 = dot(v2, b.v0);
+    immutable float d21 = dot(v2, b.v1);
+    result.y = (b.d11 * d20 - b.d01 * d21) * b.denomInv;
+    result.z = (b.d00 * d21 - b.d01 * d20) * b.denomInv;
     result.x = 1.0f - result.y - result.z;
     return result;
 }
@@ -76,12 +111,19 @@ do
     return Float3(p.x, p.y, p.z);
 }
 
+struct Triangle {
+    int[3] index;
+    PreComputedBarycentric preBary;
+    Float2 min;
+    Float2 max;
+}
+
 struct Raster {
-    void Render(const Float3 cameraPosition, ref Surface surface, float[] zbuffer) @nogc pure
+    void Render(const Float3 cameraPosition, ref Surface surface) @nogc pure
     in
     {
         assert(surface.m_data.length == m_width * m_height);
-        assert(surface.m_data.length == zbuffer.length);
+        assert(surface.m_data.length == m_zbuffer.length);
         assert(cameraPosition.isValid());
     }
     do
@@ -94,7 +136,7 @@ struct Raster {
             {
                 int pixCoord = x + yOffset;
                 surface.m_data[pixCoord] = 0xFFFFFFFF;
-                zbuffer[pixCoord] = float.max;
+                m_zbuffer[pixCoord] = float.max;
             }
         }
 
@@ -107,23 +149,35 @@ struct Raster {
         {
             m_vertices[i] = project(m_mesh.vertices[i], view, proj, viewport);
         }
+        foreach(i; 0..m_mesh.face.length)
+        {
+            Face* face = &m_mesh.face[i];
+            Triangle* triangle = &m_triangles[i];
+            triangle.index = face.vertices;
+            immutable int[3] vIdx = [ face.vertices[0], face.vertices[1], face.vertices[2] ];
+            immutable Float3[3] vertex = [ m_vertices[vIdx[0]], m_vertices[vIdx[1]], m_vertices[vIdx[2]] ];
+            triangle.min = Float2( min(vertex[0].x, vertex[1].x, vertex[2].x), min(vertex[0].y, vertex[1].y,vertex[2].y) );
+            triangle.max = Float2( max(max(vertex[0].x, vertex[1].x),vertex[2].x),max(max(vertex[0].y, vertex[1].y),vertex[2].y) );
+            triangle.preBary = PreComputeBarycentric(vertex[0], vertex[1], vertex[2]);
+        }
         foreach(y; 0..m_height)
         {
             foreach(x; 0..m_width)
             {
                 immutable Float3 pixel = Float3(x, y, 0);
-                for(int iFace = 0; iFace < m_mesh.face.length; iFace += 3)
-                foreach(face; m_mesh.face)
+                foreach(tr; m_triangles)
                 {
-                    immutable int[3] vIdx = [ face.vertices[0], face.vertices[1], face.vertices[2] ];
+                    if(pixel.x < tr.min.x || pixel.y < tr.min.y || pixel.x > tr.max.x || pixel.y > tr.max.y)
+                        continue;
+                    immutable int[3] vIdx = [ tr.index[0], tr.index[1], tr.index[2] ];
                     immutable Float3[3] vertex = [ m_vertices[vIdx[0]], m_vertices[vIdx[1]], m_vertices[vIdx[2]] ];
-                    immutable Float3 bary = Barycentric(pixel, vertex[0], vertex[1], vertex[2]);
+                    immutable Float3 bary = Barycentric(pixel, m_vertices[vIdx[0]], tr.preBary);
                     if(0 <= bary.x && bary.x <= 1 && 0 <= bary.y && bary.y <= 1 && 0 <= bary.z && bary.z <= 1)
                     {
                         immutable float z = bary.x * vertex[0].z + bary.y * vertex[1].z + bary.z * vertex[2].z;
-                        if(z < zbuffer[y*m_width+x])
+                        if(z < m_zbuffer[y*m_width+x])
                         {
-                            zbuffer[y*m_width+x] = z;
+                            m_zbuffer[y*m_width+x] = z;
                             immutable int blue = cast(int)(bary.y * 255.0f);
                             immutable int green = cast(int)(bary.z * 255.0f) << 8;
                             immutable int red = cast(int)(bary.x * 255.0f) << 16;
@@ -146,20 +200,26 @@ struct Raster {
     {
         m_width = width;
         m_height = height;
+        m_zbuffer.length = m_width*m_height;
     }
 
     void SetModel(Mesh mesh)
     {
         m_mesh = mesh;
         m_vertices.length = m_mesh.vertices.length;
+        m_triangles.length = m_mesh.face.length;
     }
 
     int m_width, m_height;
     Mesh m_mesh;
     Float3[] m_vertices;
+    Triangle[] m_triangles;
+    float[] m_zbuffer;
 
     invariant
     {
         assert(m_vertices.length == m_mesh.vertices.length);
+        assert(m_triangles.length == m_mesh.face.length);
+        assert(m_zbuffer.length == m_width*m_height);
     }
 }
