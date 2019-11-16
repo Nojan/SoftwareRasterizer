@@ -23,7 +23,7 @@ void main()
     int height = 250;
 
     auto window = SDL_CreateWindow(
-            "An SDL2 window",
+            "Software renderer",
             25,
             35,
             width,
