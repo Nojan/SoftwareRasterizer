@@ -11,8 +11,7 @@ import std.math;
 
 void main()
 {
-    auto libSDLName = "external\\SDL2\\lib\\x64\\SDL2.dll";
-	DerelictSDL2.load(libSDLName);
+    DerelictSDL2.load();
     if(0 != SDL_Init(SDL_INIT_VIDEO))
     {
         assert(0, "Failed to initialize sdl!");
